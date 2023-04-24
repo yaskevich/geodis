@@ -10,11 +10,15 @@
 
 <script setup lang="ts">
 import { h, ref, reactive, onMounted, onBeforeUnmount, toRaw, onUnmounted, markRaw, shallowRef } from 'vue';
-import { Map, NavigationControl, Marker, Popup, FullscreenControl } from 'maplibre-gl';
+import { Map, NavigationControl, Marker, Popup, FullscreenControl, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { StyleSpecification, ResourceTypeEnum, MapOptions } from 'maplibre-gl';
+import type { StyleSpecification, ResourceTypeEnum, MapOptions, LngLatLike } from 'maplibre-gl';
 import { isMapboxURL, transformMapboxUrl } from 'maplibregl-mapbox-request-transformer';
+import project from '../../package.json';
+import points from '../../../data/points.json';
+import places from '../../../data/places.json';
 
+const placesMap = Object.fromEntries(places.map(x => [x.IDPl, x]));
 const mapContainer = ref<HTMLElement>();
 const map = shallowRef<Map>();
 const hideMap = ref(false);
@@ -67,7 +71,7 @@ const initMap = (lngLat: [number, number]) => {
       container: mapContainer.value,
       style,
       center: lngLat,
-      zoom: 12,
+      // zoom: 12,
     } as MapOptions;
 
     if (isMapbox && mapboxKey) {
@@ -85,13 +89,27 @@ const initMap = (lngLat: [number, number]) => {
       // .setPopup(new Popup().setText('test'))
       .addTo(mapInstance);
 
+    points.map(x => {
+      new Marker({ color: 'orange' })
+        .setLngLat([x.lon, x.lat])
+        .setPopup(new Popup().setText(`${x.name} (${x.id}): ${placesMap[x.id]['Note']} [${x.num}]`))
+        .addTo(mapInstance);
+    });
+
+    const coordinates = points.map(x => [x.lon, x.lat] as LngLatLike);
+    const bounds = coordinates.reduce(
+      (bound, coord) => bound.extend(coord),
+      new LngLatBounds(coordinates[0], coordinates[0])
+    );
+    mapInstance.fitBounds(bounds, { padding: 50 });
+
     return mapInstance;
   }
 };
 
 onMounted(async () => {
   if (mapContainer.value) {
-    map.value = initMap([18.652778, 54.350556 ]);
+    map.value = initMap([18.652778, 54.350556]);
   }
 });
 </script>
@@ -99,7 +117,7 @@ onMounted(async () => {
 .map-wrap {
   position: relative;
   width: 100%;
-  height: 400px;
+  height: 500px;
 }
 
 .map {
