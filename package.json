@@ -10,6 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "nominatim-client": "^3.2.1"
+    "node-fetch": "^3.3.1",
+    "nominatim-client": "^3.2.1",
+    "osm-api": "^1.0.5"
   }
 }
