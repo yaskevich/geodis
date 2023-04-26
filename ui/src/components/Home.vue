@@ -1,6 +1,6 @@
 <template>
-  <div class="about" style="text-align: center">
-    <h3>JD</h3>
+  <div class="about" >
+    <h3 style="text-align: center">JD</h3>
     <n-divider></n-divider>
     <div class="map-wrap" v-if="!hideMap">
       <div class="map" ref="mapContainer"></div>
@@ -15,8 +15,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { StyleSpecification, ResourceTypeEnum, MapOptions, LngLatLike } from 'maplibre-gl';
 import { isMapboxURL, transformMapboxUrl } from 'maplibregl-mapbox-request-transformer';
 import project from '../../package.json';
-import points from '../../../data/points.json';
-import places from '../../../data/places.json';
+import points from '../../../server/data/points.json';
+import places from '../../../server/data/places.json';
 
 const placesMap = Object.fromEntries(places.map(x => [x.IDPl, x]));
 const mapContainer = ref<HTMLElement>();
@@ -83,16 +83,18 @@ const initMap = (lngLat: [number, number]) => {
     mapInstance.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     mapInstance.addControl(new FullscreenControl({ container: mapContainer.value }));
     // draggable: true
-    marker.value = new Marker({ color: '#FF0000' });
+    marker.value = new Marker({ color: 'gray' });
     marker.value
       .setLngLat(lngLat)
       // .setPopup(new Popup().setText('test'))
       .addTo(mapInstance);
 
     points.map(x => {
-      new Marker({ color: 'orange' })
+      new Marker({ color: x.color })
         .setLngLat([x.lon, x.lat])
-        .setPopup(new Popup().setText(`${x.name} (${x.id}): ${placesMap[x.id]['Note']} [${x.num}]`))
+        .setPopup(new Popup()
+        .setHTML(`<strong>${x.name}</strong> ${x.color === 'green' ? '🙂': `[${x.num}]`}<br/>${placesMap[x.id]['Note']}  <br/><em>ID: ${x.id}</em>`))
+        // .setText())
         .addTo(mapInstance);
     });
 
