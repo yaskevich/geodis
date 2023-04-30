@@ -9,7 +9,7 @@ import passportJWT from 'passport-jwt';
 import history from 'connect-history-api-fallback';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-// import db from './db.js';
+// // import db from './db.js';
 
 dotenv.config();
 
@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const __package = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
 
-// environment variables
+// // environment variables
 const port = process.env.PORT || 8080;
 const secret = process.env.SECRET;
 const appName = __package?.name || String(port);
@@ -49,12 +49,12 @@ passport.use(strategy);
 const auth = passport.authenticate('jwt', { session: false });
 const app = express();
 
-app.use(express.static('public'));
+app.use('/api/media', express.static(path.join(__dirname, 'media')));
 app.use(compression());
 app.set('trust proxy', 1);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(history());
+// app.use(history());
 
 
 // app.post('/api/user/login', async (req, res) => {
@@ -99,6 +99,13 @@ app.use(history());
 //   res.json(await db.resetPassword(req.user, req.body?.id));
 // });
 
+app.get('/api/places', async (req, res) => {
+  res.sendFile(path.join(__dirname, 'data', 'places.json'))
+});
+
+app.get('/api/geo', async (req, res) => {
+  res.sendFile(path.join(__dirname, 'data', 'geo.json'))
+});
 
 app.listen(port);
 console.log(`Backend is at port ${port}`);
