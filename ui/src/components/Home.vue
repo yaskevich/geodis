@@ -6,24 +6,50 @@
       <div class="map" ref="mapContainer"></div>
     </div>
   </div>
+  <n-modal v-model:show="showModal" preset="dialog" title="Dialog" to=".map">
+    <template #header>
+      <div>{{ places[feat?.id]['Sorting form'] }} {{ places[feat?.id]['Caption form'] }}</div>
+    </template>
+    <div>
+      <div>{{ places[feat?.id]['Note'] }}</div>
+      <div>OSM: {{ feat.name }} [{{ feat.num }}]</div>
+    </div>
+    <template #action>
+      <div>
+        <n-space justify="space-between">
+          <n-button type="primary">Approve</n-button><n-button type="error">Decline</n-button
+          ><n-button type="info">Postpone</n-button>
+        </n-space>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
-import { h, ref, reactive, onMounted, onBeforeUnmount, toRaw, onUnmounted, markRaw, shallowRef } from 'vue';
+import { ref, reactive, onMounted, onBeforeUnmount, toRaw, markRaw, shallowRef } from 'vue';
 import { Map, NavigationControl, Marker, Popup, FullscreenControl, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import type { Position, Point, FeatureCollection, Feature } from 'geojson';
 import type { GeoJSONSource, StyleSpecification, ResourceTypeEnum, MapOptions, LngLatLike } from 'maplibre-gl';
 import { isMapboxURL, transformMapboxUrl } from 'maplibregl-mapbox-request-transformer';
-import project from '../../package.json';
-import points from '../../../server/data/points.json';
-import places from '../../../server/data/places.json';
-import geo from '../../../server/data/geo.json';
+// import project from '../../package.json';
+interface IItem {
+  name: string;
+  num: number;
+  id: number;
+}
 
-const placesMap = Object.fromEntries(places.map(x => [x.IDPl, x]));
+interface keyable {
+  [key: string]: any;
+}
 const mapContainer = ref<HTMLElement>();
 const map = shallowRef<Map>();
 const hideMap = ref(false);
 const marker = shallowRef<Marker>();
+const showModal = ref(false);
+const places = reactive({} as keyable);
+const geo = reactive({} as FeatureCollection);
+const feat = reactive({} as IItem);
 
 const opts = {
   map_vector: false,
@@ -145,81 +171,93 @@ const initMap = async (lngLat: [number, number]) => {
       // const allImages = map.listImages();
       // console.log('all', allImages);
       ////
-      const layers = map.getStyle().layers;
-      // Find the index of the first symbol layer in the map style
-      let firstSymbolId;
-      for (var i = 0; i < layers.length; i++) {
-        if (layers[i].type === 'symbol') {
-          firstSymbolId = layers[i].id;
-          break;
-        }
-      }
-      map.addSource('points-source', {
-        type: 'geojson',
-        data: geo,
-      });
-      map.addLayer(
-        {
-          id: 'points-layer',
-          type: 'symbol',
-          // type: "circle",
-          source: 'points-source',
-          layout: {
-            'icon-image': ['get', 'color'],
-            'icon-allow-overlap': true,
-          },
-          paint: {
-            // 'icon-opacity': 0.5,
-            'icon-color': 'green',
-            // "icon-allow-overlap": true,
-          },
-        },
-        firstSymbolId
-      );
-
-      map.on('click', 'points-layer', function (e) {
-        if (e?.features?.length) {
-          // console.log(e.features[0]?.properties?.id, e.features[0]?.properties);
-          if (e.features[0]?.properties?.color) {
-            e.features[0].properties.color = 'green';
-            // console.log(e.features[0]);
-            console.log(e.features[0].properties.id);
-            const item = geo.features.find(x => x.properties.id === e?.features?.[0]?.properties?.id);
-            if (item?.properties?.id) {
-              item.properties.color = 'green';
-              // (map?.getSource('points-source')  as GeoJSONSource)?.setData(geo);
-              const src = map.getSource('points-source') as GeoJSONSource;
-              if (src) {
-                src.setData(geo as any);
-              }
-              // map.setLayoutProperty('points-layer', 'icon-image', ['get', 'color']);
-              // map.setLayoutProperty('points-layer', 'icon-image', [
-              //   'match',
-              //   ['get', 'id'],
-              //   e.features[0].properties.id,
-              //   'green',
-              //   ['get', 'color'],
-              // ]);
-            }
+      if (geo?.features?.length) {
+        const layers = map.getStyle().layers;
+        // Find the index of the first symbol layer in the map style
+        let firstSymbolId;
+        for (var i = 0; i < layers.length; i++) {
+          if (layers[i].type === 'symbol') {
+            firstSymbolId = layers[i].id;
+            break;
           }
         }
-      });
+        map.addSource('points-source', {
+          type: 'geojson',
+          data: geo,
+        });
+        map.addLayer(
+          {
+            id: 'points-layer',
+            type: 'symbol',
+            // type: "circle",
+            source: 'points-source',
+            layout: {
+              'icon-image': ['get', 'color'],
+              'icon-allow-overlap': true,
+            },
+            paint: {
+              // 'icon-opacity': 0.5,
+              'icon-color': 'green',
+              // "icon-allow-overlap": true,
+            },
+          },
+          firstSymbolId
+        );
 
-      // points.map(x => {
-      //   var el = document.createElement('div');
-      //   el.className = 'mrk';
-      //   el.onclick = function () {
-      //     console.log('here', x);
-      //   };
-      //   new Marker(el).setLngLat([x.lon, x.lat]).addTo(map);
-      // });
+        map.on('click', 'points-layer', function (e) {
+          if (e?.features?.length) {
+            // console.log(e.features[0]?.properties?.id, e.features[0]?.properties);
+            if (e.features[0]?.properties?.color) {
+              e.features[0].properties.color = 'green';
+              // console.log(e.features[0]);
+              console.log(e.features[0].properties.id);
+              const item = geo.features.find((x: Feature) => x.properties?.id === e?.features?.[0]?.properties?.id);
 
-      const coordinates = points.map(x => [x.lon, x.lat] as LngLatLike);
-      const bounds = coordinates.reduce(
-        (bound, coord) => bound.extend(coord),
-        new LngLatBounds(coordinates[0], coordinates[0])
-      );
-      map.fitBounds(bounds, { padding: 50 });
+              if (item?.properties?.id) {
+                Object.assign(feat, item.properties);
+                // console.log(item.properties);
+                item.properties.color = 'green';
+                // (map?.getSource('points-source')  as GeoJSONSource)?.setData(geo);
+                const src = map.getSource('points-source') as GeoJSONSource;
+                if (src) {
+                  src.setData(geo as any);
+                }
+                showModal.value = true;
+
+                // map.flyTo({
+                //   center: e.features[0].geometry.coordinates,
+                //   zoom: 9
+                // });
+                // map.setLayoutProperty('points-layer', 'icon-image', ['get', 'color']);
+                // map.setLayoutProperty('points-layer', 'icon-image', [
+                //   'match',
+                //   ['get', 'id'],
+                //   e.features[0].properties.id,
+                //   'green',
+                //   ['get', 'color'],
+                // ]);
+              }
+            }
+          }
+        });
+
+        // points.map(x => {
+        //   var el = document.createElement('div');
+        //   el.className = 'mrk';
+        //   el.onclick = function () {
+        //     console.log('here', x);
+        //   };
+        //   new Marker(el).setLngLat([x.lon, x.lat]).addTo(map);
+        // });
+
+        // const coordinates = points.map(x => [x.lon, x.lat] as LngLatLike);
+        const coordinates = geo.features.map((x: Feature) => (x?.geometry as Point)?.coordinates);
+        const bounds = coordinates.reduce(
+          (bound: any, coord: Position) => bound.extend(coord),
+          new LngLatBounds(coordinates[0], coordinates[0])
+        );
+        map.fitBounds(bounds, { padding: 50 });
+      }
       ////
     });
 
@@ -229,6 +267,14 @@ const initMap = async (lngLat: [number, number]) => {
 
 onMounted(async () => {
   if (mapContainer.value) {
+    const response1 = await fetch('/api/places');
+    const data1 = await response1.json();
+    Object.assign(places, Object.fromEntries(data1.map((x: any) => [x.IDPl, x])));
+
+    const response2 = await fetch('/api/geo');
+    const data2 = await response2.json();
+    Object.assign(geo, data2);
+
     map.value = await initMap([18.652778, 54.350556]);
   }
 });
