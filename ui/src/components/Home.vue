@@ -6,19 +6,20 @@
       <div class="map" ref="mapContainer"></div>
     </div>
   </div>
-  <n-modal v-model:show="showModal" preset="dialog" title="Dialog" to=".map">
+  <n-modal v-model:show="showModal" preset="dialog" title="Dialog" to=".map" v-if="item?.properties?.id">
     <template #header>
-      <div>{{ places[feat?.id]['Sorting form'] }} {{ places[feat?.id]['Caption form'] }}</div>
+      <div>{{ places[item?.properties?.id]['Sorting form'] }} {{ places[item?.properties?.id]['Caption form'] }}</div>
     </template>
     <div>
-      <div>{{ places[feat?.id]['Note'] }}</div>
-      <div>OSM: {{ feat.name }} [{{ feat.num }}]</div>
+      <div>{{ places[item?.properties?.id]['Note'] }}</div>
+      <div>OSM: {{ item?.properties?.name }} [{{ item?.properties?.num }}]</div>
     </div>
     <template #action>
       <div>
         <n-space justify="space-between">
-          <n-button type="primary">Approve</n-button><n-button type="error">Decline</n-button
-          ><n-button type="info">Postpone</n-button>
+          <n-button type="primary" @click="approve(true)">Approve</n-button
+          ><n-button type="error" @click="approve(false)">Mark wrong</n-button
+          ><n-button type="info" @click="postpone">Postpone</n-button>
         </n-space>
       </div>
     </template>
@@ -33,23 +34,26 @@ import type { Position, Point, FeatureCollection, Feature } from 'geojson';
 import type { GeoJSONSource, StyleSpecification, ResourceTypeEnum, MapOptions, LngLatLike } from 'maplibre-gl';
 import { isMapboxURL, transformMapboxUrl } from 'maplibregl-mapbox-request-transformer';
 // import project from '../../package.json';
-interface IItem {
-  name: string;
-  num: number;
-  id: number;
-}
+// interface IItem {
+//   properties: {
+//     name: string;
+//     num: number;
+//     id: number;
+//     color: string;
+//   };
+// }
 
 interface keyable {
   [key: string]: any;
 }
 const mapContainer = ref<HTMLElement>();
-const map = shallowRef<Map>();
+const mapInstance = ref<Map>();
 const hideMap = ref(false);
 const marker = shallowRef<Marker>();
 const showModal = ref(false);
 const places = reactive({} as keyable);
 const geo = reactive({} as FeatureCollection);
-const feat = reactive({} as IItem);
+const item = ref<Feature>();
 
 const opts = {
   map_vector: false,
@@ -57,6 +61,46 @@ const opts = {
   map_style: null,
   map_mapbox: false,
   map_mapbox_key: null,
+};
+
+const postpone = () => {
+  showModal.value = false;
+};
+
+const approve = async (status: boolean) => {
+  showModal.value = false;
+  // (map?.getSource('points-source')  as GeoJSONSource)?.setData(geo);
+  // console.log(geo);
+  const src = mapInstance?.value?.getSource('points-source') as GeoJSONSource;
+  if (src && item.value?.properties?.color) {
+    item.value.properties.color = status ? 'green' : 'orange';
+    src.setData(geo as any);
+    const response = await fetch('/api/point', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // 'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: JSON.stringify({ id: item.value?.properties.id || 0, status }),
+    });
+    const data = await response.json();
+    if (item.value?.properties.id === data?.id) {
+      console.log('status', data.id, status);
+    }
+  }
+
+  // map.value.flyTo({
+  //   center: e.features[0].geometry.coordinates,
+  //   zoom: 9
+  // });
+  // map.value.setLayoutProperty('points-layer', 'icon-image', ['get', 'color']);
+  // map.setLayoutProperty('points-layer', 'icon-image', [
+  //   'match',
+  //   ['get', 'id'],
+  //   e.features[0].properties.id,
+  //   'green',
+  //   ['get', 'color'],
+  // ]);
 };
 
 const initMap = async (lngLat: [number, number]) => {
@@ -210,37 +254,15 @@ const initMap = async (lngLat: [number, number]) => {
             if (e.features[0]?.properties?.color) {
               e.features[0].properties.color = 'green';
               // console.log(e.features[0]);
-              console.log(e.features[0].properties.id);
-              const item = geo.features.find((x: Feature) => x.properties?.id === e?.features?.[0]?.properties?.id);
-
-              if (item?.properties?.id) {
-                Object.assign(feat, item.properties);
-                // console.log(item.properties);
-                item.properties.color = 'green';
-                // (map?.getSource('points-source')  as GeoJSONSource)?.setData(geo);
-                const src = map.getSource('points-source') as GeoJSONSource;
-                if (src) {
-                  src.setData(geo as any);
-                }
+              // console.log(e.features[0].properties.id);
+              const point = geo.features.find((x: Feature) => x.properties?.id === e?.features?.[0]?.properties?.id);
+              if (point?.properties?.id) {
+                item.value = point;
                 showModal.value = true;
-
-                // map.flyTo({
-                //   center: e.features[0].geometry.coordinates,
-                //   zoom: 9
-                // });
-                // map.setLayoutProperty('points-layer', 'icon-image', ['get', 'color']);
-                // map.setLayoutProperty('points-layer', 'icon-image', [
-                //   'match',
-                //   ['get', 'id'],
-                //   e.features[0].properties.id,
-                //   'green',
-                //   ['get', 'color'],
-                // ]);
               }
             }
           }
         });
-
         // points.map(x => {
         //   var el = document.createElement('div');
         //   el.className = 'mrk';
@@ -249,7 +271,6 @@ const initMap = async (lngLat: [number, number]) => {
         //   };
         //   new Marker(el).setLngLat([x.lon, x.lat]).addTo(map);
         // });
-
         // const coordinates = points.map(x => [x.lon, x.lat] as LngLatLike);
         const coordinates = geo.features.map((x: Feature) => (x?.geometry as Point)?.coordinates);
         const bounds = coordinates.reduce(
@@ -275,7 +296,7 @@ onMounted(async () => {
     const data2 = await response2.json();
     Object.assign(geo, data2);
 
-    map.value = await initMap([18.652778, 54.350556]);
+    mapInstance.value = await initMap([18.652778, 54.350556]);
   }
 });
 </script>
