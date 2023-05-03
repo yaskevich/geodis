@@ -1,6 +1,9 @@
 package-lock.json
 data/
 cache/
+client/components.d.ts
+client/auto-imports.d.ts
+server/media
 dist/
 # Logs
 logs
