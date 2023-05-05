@@ -24,6 +24,10 @@ const appName = __package?.name || String(port);
 const commit = process.env.COMMIT;
 const unix = process.env.COMMITUNIX;
 
+const getUserInfo = async (x) => {
+  return { id: 1, username: 'ok', email: 'ok', activated: true };
+};
+
 const strategy = new passportJWT.Strategy(
   {
     // jwtFromRequest: passportJWT.ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -33,7 +37,7 @@ const strategy = new passportJWT.Strategy(
     ]),
     secretOrKey: secret,
   },
-  (jwtPayload, done) => db.getUserDataByID(jwtPayload.sub)
+  (jwtPayload, done) => getUserInfo(jwtPayload.sub)
     .then((user) => done(null, user))
     .catch((err) => done(err)),
 );
@@ -46,7 +50,9 @@ const issueToken = (user) => jwt.sign({
 }, secret);
 
 passport.use(strategy);
+// const auth = passport.authenticate('jwt', { session: false }, (err, user, info, status) => { console.log(err, user, info, status); });
 const auth = passport.authenticate('jwt', { session: false });
+
 const app = express();
 
 app.use('/api/media', express.static(path.join(__dirname, 'media')));
@@ -57,18 +63,28 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // app.use(history());
 
 
-// app.post('/api/user/login', async (req, res) => {
-//   const userData = await db.getUserData(req.body.email, req.body.password);
-//   if (userData && Object.keys(userData).length && !userData?.error) {
-//     console.log(req.body.email, '<SUCCESS>');
-//     res.json({
-//       ...userData, token: issueToken(userData), server: __package.version, commit, unix
-//     });
-//   } else {
-//     console.log(`login attempt as [${req.body.email}]•[${req.body.password}]►${userData.error}◄`);
-//     res.json(userData);
-//   }
-// });
+app.post('/api/user/login', async (req, res) => {
+  // const userData = await db.getUserData(req.body.email, req.body.password);
+  // if (userData && Object.keys(userData).length && !userData?.error) {
+  //   console.log(req.body.email, '<SUCCESS>');
+  //   res.json({
+  //     ...userData, token: issueToken(userData), server: __package.version, commit, unix
+  //   });
+  // } else {
+  //   console.log(`login attempt as [${req.body.email}]•[${req.body.password}]►${userData.error}◄`);
+  //   res.json(userData);
+  // }
+  // console.log(req.body);
+  // console.log(req.body.email, process.env.USER1, req.body.password, process.env.PASS1);
+  if (req.body.email === process.env.USER1 && req.body.password === process.env.PASS1) {
+    console.log(req.body.email, '<SUCCESS>');
+    res.json({
+      token: issueToken({ id: 1 }), server: __package.version, commit, unix
+    });
+  } else {
+    console.log(`login attempt as [${req.body.email}]•[${req.body.password}]`);
+  }
+});
 
 // app.post('/api/user/reg', async (req, res) => {
 //   const userdata = req.body;
@@ -99,12 +115,17 @@ app.use(bodyParser.urlencoded({ extended: true }));
 //   res.json(await db.resetPassword(req.user, req.body?.id));
 // });
 
-app.get('/api/places', async (req, res) => {
-  res.sendFile(path.join(__dirname, 'data', 'places.json'))
+app.get('/api/places', auth, async (req, res) => {
+  res.sendFile(path.join(__dirname, 'data', 'places.json'));
 });
 
-app.get('/api/geo', async (req, res) => {
-  res.sendFile(path.join(__dirname, 'data', 'geo.json'))
+app.get('/api/geo', auth, async (req, res) => {
+  res.sendFile(path.join(__dirname, 'data', 'geo.json'));
+});
+
+app.post('/api/point', auth, async (req, res) => {
+  // console.log(req.body);
+  res.json({ id: Number(req.body.id) });
 });
 
 app.listen(port);

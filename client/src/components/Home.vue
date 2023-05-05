@@ -33,6 +33,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Position, Point, FeatureCollection, Feature } from 'geojson';
 import type { GeoJSONSource, StyleSpecification, ResourceTypeEnum, MapOptions, LngLatLike } from 'maplibre-gl';
 import { isMapboxURL, transformMapboxUrl } from 'maplibregl-mapbox-request-transformer';
+import store from '../store';
 // import project from '../../package.json';
 // interface IItem {
 //   properties: {
@@ -73,19 +74,28 @@ const approve = async (status: boolean) => {
   // console.log(geo);
   const src = mapInstance?.value?.getSource('points-source') as GeoJSONSource;
   if (src && item.value?.properties?.color) {
-    item.value.properties.color = status ? 'green' : 'orange';
+    item.value.properties.color = status ? 'green' : 'black';
     src.setData(geo as any);
-    const response = await fetch('/api/point', {
+    const options = {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${store.state.token}`,
         'Content-Type': 'application/json',
         // 'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: JSON.stringify({ id: item.value?.properties.id || 0, status }),
-    });
-    const data = await response.json();
-    if (item.value?.properties.id === data?.id) {
-      console.log('status', data.id, status);
+    };
+    const response = await fetch('/api/point', options);
+    console.log(options);
+
+    if (response.status === 200) {
+      const data = await response.json();
+
+      if (item.value?.properties.id === data?.id) {
+        console.log('status', data.id, status);
+      }
+    } else {
+      console.log('error', response);
     }
   }
 
@@ -211,7 +221,7 @@ const initMap = async (lngLat: [number, number]) => {
       //     });
       //   })
       // );
-      await Promise.all(['orange', 'yellow', 'green'].map(image => loadImage(image)));
+      await Promise.all(['orange', 'yellow', 'green', 'black'].map(image => loadImage(image)));
       // const allImages = map.listImages();
       // console.log('all', allImages);
       ////
@@ -288,11 +298,17 @@ const initMap = async (lngLat: [number, number]) => {
 
 onMounted(async () => {
   if (mapContainer.value) {
-    const response1 = await fetch('/api/places');
+    // console.log('tkn',store.state.token);
+    
+    const response1 = await fetch('/api/places', {
+      headers: { 'Authorization': `Bearer ${store.state.token}` },
+    });
     const data1 = await response1.json();
     Object.assign(places, Object.fromEntries(data1.map((x: any) => [x.IDPl, x])));
 
-    const response2 = await fetch('/api/geo');
+    const response2 = await fetch('/api/geo', {
+      headers: { 'Authorization': `Bearer ${store.state.token}` },
+    });
     const data2 = await response2.json();
     Object.assign(geo, data2);
 
