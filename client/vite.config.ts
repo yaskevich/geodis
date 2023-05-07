@@ -31,6 +31,10 @@ export default defineConfig({
         secure: false,
         ws: true,
       },
+      '/ws': {
+        target: 'ws://localhost:3101/',
+        ws: true,
+      },
     },
   },
 });
