@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fetch from 'node-fetch';
-import osm from "osm-api";
+// import osm from "osm-api";
 import GeoJSON from 'geojson';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,9 +55,12 @@ for (let unit of data) {
       datum = JSON.parse(fs.readFileSync(pathToOSM, { encoding: 'utf8', flag: 'r' }));
     } else {
       console.log('>>>>>>>>>> query', id, mapped);
-      const response = await fetch(`https://nominatim.openstreetmap.org/lookup?osm_ids=N${mapped}&format=json&extratags=1&namedetails=1`);
-      const datumNom = (await response.json())?.shift();
-      const datumOSM = (await osm.getFeature("node", mapped))?.shift();
+      const response1 = await fetch(`https://nominatim.openstreetmap.org/lookup?osm_ids=N${osmId}&format=json&extratags=1&namedetails=1`);
+      const datumNom = (await response1.json())?.shift();
+
+      const response2 = await fetch(`https://www.openstreetmap.org/api/0.6/node/${osmId}.json`);
+      const datumOSM = (await response2.json())?.shift();
+
       datum = { nominatim: datumNom, osm: datumOSM };
       fs.writeFileSync(pathToOSM, JSON.stringify(datum, null, 4));
     }
@@ -74,10 +77,13 @@ for (let unit of data) {
   if (fs.existsSync(pathToJSON)) {
     raw = JSON.parse(fs.readFileSync(pathToJSON, { encoding: 'utf8', flag: 'r' }));
   } else {
-    const query = { q: title, addressdetails: '1' };
+    // const query = { q: title, addressdetails: '1' };
     console.log('>>>>>>>>>> query', id);
-    raw = await client.search(query);
-    fs.writeFileSync(pathToJSON, JSON.stringify(info, null, 4));
+    // raw = await client.search(query);
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${title}&format=json&addressdetails=1&extratags=1&namedetails=1`);
+    raw = await response.json();
+
+    fs.writeFileSync(pathToJSON, JSON.stringify(raw, null, 4));
     // exit();
   }
 
@@ -127,7 +133,7 @@ console.log(0, zero);
 // console.log('x', nonplace);
 console.log('1', only);
 
-const geo = GeoJSON.parse(output, {Point: ['lat', 'lon']});
+const geo = GeoJSON.parse(output, { Point: ['lat', 'lon'] });
 
 fs.writeFileSync(path.join(__dirname, 'data', 'points.json'), JSON.stringify(output, null, 2), 'utf8');
 
