@@ -1,21 +1,26 @@
+import http from 'http';
 import express from 'express';
 import path, { dirname } from 'path';
+import fs from 'fs';
 import compression from 'compression';
 import bodyParser from 'body-parser';
-import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import passport from 'passport';
 import passportJWT from 'passport-jwt';
 import history from 'connect-history-api-fallback';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-// // import db from './db.js';
+import WebSocket, { WebSocketServer } from 'ws';
+import { EventEmitter } from 'node:events';
+import db from './db.js';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const __package = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+
+// await db.getPlaces();
 
 // // environment variables
 const port = process.env.PORT || 8080;
@@ -55,6 +60,7 @@ const auth = passport.authenticate('jwt', { session: false });
 
 const app = express();
 
+app.use(express.static('public'));
 app.use('/api/media', express.static(path.join(__dirname, 'media')));
 app.use(compression());
 app.set('trust proxy', 1);
@@ -115,18 +121,96 @@ app.post('/api/user/login', async (req, res) => {
 //   res.json(await db.resetPassword(req.user, req.body?.id));
 // });
 
+// app.get('/api/places', async (req, res) => {
+//   res.sendFile(path.join(__dirname, 'data', 'places.json'));
+// });
+
 app.get('/api/places', auth, async (req, res) => {
-  res.sendFile(path.join(__dirname, 'data', 'places.json'));
+  res.json(await db.getPlaces());
 });
 
+// app.get('/api/geo', async (req, res) => {
+//   res.sendFile(path.join(__dirname, 'data', 'geo.json'));
+// });
+
 app.get('/api/geo', auth, async (req, res) => {
-  res.sendFile(path.join(__dirname, 'data', 'geo.json'));
+  res.json(await db.getPlacesGeo());
 });
 
 app.post('/api/point', auth, async (req, res) => {
   // console.log(req.body);
-  res.json({ id: Number(req.body.id) });
+  const result = await db.setPlaceStatus(req.body);
+  // console.log(result);
+  res.json({ result: (result?.shift() === 1) });
 });
 
-app.listen(port);
-console.log(`Backend is at port ${port}`);
+
+app.get('/api/status', auth, async (req, res) => {
+  res.json(db.statusList);
+});
+
+// app.listen(port);
+
+const onSocketError = (err) => {
+  console.error(err);
+};
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer: true });
+let processingInProgress = false;
+
+const inform = (msg) => {
+  // console.log(wss.clients);
+  processingInProgress = false;
+  wss.clients.forEach((client) => {
+    if (client?.readyState === WebSocket.OPEN) {
+      client.send("updated → " + (processingInProgress ? 'working' : 'ready'));
+    }
+  });
+  console.log('::done', msg);
+};
+const eventHandler = new EventEmitter();
+
+eventHandler.on('performBackgroundTask', () => {
+  console.log('::start');
+  if (!processingInProgress) {
+    processingInProgress = true;
+    setTimeout(() => inform('check'), 5000);
+  }
+});
+
+server.on('upgrade', (request, socket, head) => {
+  socket.on('error', onSocketError);
+  // console.log('Parsing session from request...');
+
+  // sessionParser(request, {}, () => {
+  //   if (!request.session.userId) {
+  //     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+  //     socket.destroy();
+  //     return;
+  //   }
+
+  //   console.log('Session is parsed!');
+
+  //   socket.removeListener('error', onSocketError);
+
+  //   wss.handleUpgrade(request, socket, head, function (ws) {
+  //     wss.emit('connection', ws, request);
+  //   });
+  // });
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
+
+// wss.on('connection', function connection(ws) {
+//   ws.on('message', function message(data) {
+//     console.log('→ %s', data);
+//   });
+
+//   console.log('set', processingInProgress);
+//   eventHandler.emit('performBackgroundTask', 1);
+//   ws.send('start → ' + (processingInProgress ? 'working' : 'ready'));
+// });
+
+server.listen(port, () => { console.log(`Backend is at port ${port}`) });
