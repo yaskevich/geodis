@@ -1,6 +1,7 @@
 <template>
   <div class="about">
-    <h3 style="text-align: center">JD</h3>
+    <!-- <h3 style="text-align: center">JD</h3> -->
+
     <!-- <n-divider></n-divider> -->
     <div class="map-wrap" v-if="!hideMap">
       <div class="map" ref="mapContainer"></div>
@@ -8,18 +9,21 @@
   </div>
   <n-modal v-model:show="showModal" preset="dialog" title="Dialog" to=".map" v-if="item?.properties?.id">
     <template #header>
-      <div>{{ places[item?.properties?.id]['Sorting form'] }} {{ places[item?.properties?.id]['Caption form'] }}</div>
+      <div> {{ item?.properties?.form }} {{ item?.properties?.caption }}</div>
     </template>
     <div>
-      <div>{{ places[item?.properties?.id]['Note'] }}</div>
-      <div>OSM: {{ item?.properties?.name }} [{{ item?.properties?.num }}]</div>
+      <div><em> {{ item?.properties?.note }} </em></div>
+      <div>OSM: {{ item?.properties?.name }} [{{ item?.properties?.qty }}]</div>
+      <div>ID: {{ item?.properties?.id }}</div>
+
     </div>
     <template #action>
       <div>
         <n-space justify="space-between">
-          <n-button type="primary" @click="approve(true)">Approve</n-button
-          ><n-button type="error" @click="approve(false)">Mark wrong</n-button
-          ><n-button type="info" @click="postpone">Postpone</n-button>
+          <n-button type="warning" @click="setStatus(6)">Hide</n-button>
+          <n-button type="primary" @click="setStatus(4)">Approve</n-button>
+          <n-button type="error" @click="setStatus(1)">Mark wrong</n-button>
+          <n-button type="info" @click="postpone">Postpone</n-button>
         </n-space>
       </div>
     </template>
@@ -35,24 +39,27 @@ import type { GeoJSONSource, StyleSpecification, ResourceTypeEnum, MapOptions, L
 import { isMapboxURL, transformMapboxUrl } from 'maplibregl-mapbox-request-transformer';
 import store from '../store';
 // import project from '../../package.json';
-// interface IItem {
-//   properties: {
-//     name: string;
-//     num: number;
-//     id: number;
-//     color: string;
-//   };
+// interface keyable {
+//   [key: string]: any;
 // }
 
-interface keyable {
-  [key: string]: any;
-}
+// const serverUrl = `ws://${window.location.host}/ws`;
+
+// const socket = new WebSocket(serverUrl);
+// socket.addEventListener('open', event => {
+//   console.log('ws open');
+//   socket.send('hi from client');
+// });
+
+// socket.addEventListener('message', function (event) {
+//   console.log('Message from server ', event.data);
+// });
+
 const mapContainer = ref<HTMLElement>();
 const mapInstance = ref<Map>();
 const hideMap = ref(false);
 const marker = shallowRef<Marker>();
 const showModal = ref(false);
-const places = reactive({} as keyable);
 const geo = reactive({} as FeatureCollection);
 const item = ref<Feature>();
 
@@ -68,31 +75,37 @@ const postpone = () => {
   showModal.value = false;
 };
 
-const approve = async (status: boolean) => {
+const setStatus = async (status: number) => {
   showModal.value = false;
   // (map?.getSource('points-source')  as GeoJSONSource)?.setData(geo);
   // console.log(geo);
   const src = mapInstance?.value?.getSource('points-source') as GeoJSONSource;
-  if (src && item.value?.properties?.color) {
-    item.value.properties.color = status ? 'green' : 'black';
-    src.setData(geo as any);
+  if (src && item.value?.properties?.status) {
     const options = {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${store.state.token}`,
+        Authorization: `Bearer ${store.state.token}`,
         'Content-Type': 'application/json',
         // 'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: JSON.stringify({ id: item.value?.properties.id || 0, status }),
     };
     const response = await fetch('/api/point', options);
-    console.log(options);
+    // console.log(options);
 
     if (response.status === 200) {
       const data = await response.json();
+      // console.log(data);
+      if (status === 6) {
+        console.log('hide', item.value.properties.id);
+        geo.features = geo.features.filter(x => x?.properties?.id !== item?.value?.properties?.id);
+      } else {
+        item.value.properties.status = status;
+      }
+      src.setData(geo as any);
 
-      if (item.value?.properties.id === data?.id) {
-        console.log('status', data.id, status);
+      if (data?.result) {
+        console.log('status', status);
       }
     } else {
       console.log('error', response);
@@ -209,6 +222,7 @@ const initMap = async (lngLat: [number, number]) => {
     };
 
     map.on('load', async () => {
+      map.resize();
       // console.log('pr', window.devicePixelRatio);
       // await Promise.all(
       //   ['orange', 'yellow', 'green'].map(img => {
@@ -221,7 +235,7 @@ const initMap = async (lngLat: [number, number]) => {
       //     });
       //   })
       // );
-      await Promise.all(['orange', 'yellow', 'green', 'black'].map(image => loadImage(image)));
+      await Promise.all([1, 2, 3, 4, 5].map(image => loadImage(String(image))));
       // const allImages = map.listImages();
       // console.log('all', allImages);
       ////
@@ -246,14 +260,14 @@ const initMap = async (lngLat: [number, number]) => {
             // type: "circle",
             source: 'points-source',
             layout: {
-              'icon-image': ['get', 'color'],
+              'icon-image': ['get', 'status'],
               'icon-allow-overlap': true,
             },
-            paint: {
-              // 'icon-opacity': 0.5,
-              'icon-color': 'green',
-              // "icon-allow-overlap": true,
-            },
+            // paint: {
+            // 'icon-opacity': 0.5,
+            // 'icon-color': 'green',
+            // "icon-allow-overlap": true,
+            // },
           },
           firstSymbolId
         );
@@ -261,8 +275,7 @@ const initMap = async (lngLat: [number, number]) => {
         map.on('click', 'points-layer', function (e) {
           if (e?.features?.length) {
             // console.log(e.features[0]?.properties?.id, e.features[0]?.properties);
-            if (e.features[0]?.properties?.color) {
-              e.features[0].properties.color = 'green';
+            if (e.features[0]?.properties?.status && e.features[0]?.properties?.status !== 5) {
               // console.log(e.features[0]);
               // console.log(e.features[0].properties.id);
               const point = geo.features.find((x: Feature) => x.properties?.id === e?.features?.[0]?.properties?.id);
@@ -299,18 +312,20 @@ const initMap = async (lngLat: [number, number]) => {
 onMounted(async () => {
   if (mapContainer.value) {
     // console.log('tkn',store.state.token);
-    
-    const response1 = await fetch('/api/places', {
-      headers: { 'Authorization': `Bearer ${store.state.token}` },
-    });
-    const data1 = await response1.json();
-    Object.assign(places, Object.fromEntries(data1.map((x: any) => [x.IDPl, x])));
-
-    const response2 = await fetch('/api/geo', {
-      headers: { 'Authorization': `Bearer ${store.state.token}` },
-    });
-    const data2 = await response2.json();
-    Object.assign(geo, data2);
+    if (store?.state?.token) {
+      const response = await fetch('/api/geo', {
+        headers: { Authorization: `Bearer ${store.state.token}` },
+      });
+      if (response.status === 200) {
+        const data = await response.json();
+        Object.assign(geo, data);
+      } else {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+        }
+        store.state.token = '';
+      }
+    }
 
     mapInstance.value = await initMap([18.652778, 54.350556]);
   }
@@ -320,13 +335,13 @@ onMounted(async () => {
 .map-wrap {
   position: relative;
   width: 100%;
-  height: calc(100vh - 160px);
+  height: calc(100vh - 110px);
 }
 
 .map {
   position: absolute;
   width: 100%;
-  height: calc(100vh - 160px);
+  height: calc(100vh - 110px);
 }
 
 // :deep(.mrk) {
