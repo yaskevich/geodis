@@ -8,13 +8,10 @@ import jwt from 'jsonwebtoken';
 import passport from 'passport';
 import passportJWT from 'passport-jwt';
 import history from 'connect-history-api-fallback';
-import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'node:events';
 import db from './db.js';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -60,14 +57,19 @@ const auth = passport.authenticate('jwt', { session: false });
 
 const app = express();
 
+app.use(history({
+  // verbose: true,
+  rewrites: [
+    { from: /\/api\/.*$/, to: context => context.parsedUrl.pathname }
+  ]
+}));
+
 app.use(express.static('public'));
 app.use('/api/media', express.static(path.join(__dirname, 'media')));
 app.use(compression());
 app.set('trust proxy', 1);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-// app.use(history());
-
 
 app.post('/api/user/login', async (req, res) => {
   // const userData = await db.getUserData(req.body.email, req.body.password);
@@ -144,9 +146,19 @@ app.post('/api/point', auth, async (req, res) => {
   res.json({ result: (result?.shift() === 1) });
 });
 
-
 app.get('/api/status', auth, async (req, res) => {
   res.json(db.statusList);
+});
+
+app.get('/api/json', async (req, res) => {
+  res.json(await db.getPlacesReadyJSON());
+});
+
+app.get('/api/csv', async (req, res) => {
+  // const now = (new Date().toJSON().slice(0, 10));
+  // res.set('Content-disposition', `attachment; filename=${now}`);
+  res.set('Content-Type', 'text/plain');
+  res.send(await db.getPlacesReadyCSV());
 });
 
 // app.listen(port);

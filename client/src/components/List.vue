@@ -1,9 +1,15 @@
 <template>
-  <n-space justify="center" v-if="Object.keys(states)?.length">
-    <n-data-table :columns="columns" :data="places" :pagination="pagination" :bordered="false" />
-    <!-- <n-space vertical>
+  <n-space vertical>
+    <n-space justify="center"
+      >Approved records: <a class="link" href="/api/json" target="_blank">JSON</a>⸱
+      <a class="link" href="/api/csv" target="_blank">CSV</a>
+    </n-space>
+    <n-space justify="center" v-if="Object.keys(states)?.length">
+      <n-data-table :columns="columns" :data="places" :pagination="pagination" :bordered="false" />
+      <!-- <n-space vertical>
       <div v-for="place in places">{{ place.id }}. {{ place?.form }} {{ place.status }}</div>
     </n-space> -->
+    </n-space>
   </n-space>
 </template>
 
@@ -128,3 +134,9 @@ const createColumns = [
 const columns = createColumns;
 const pagination = false as const;
 </script>
+
+<style lang="scss" scoped>
+.link {
+  text-decoration: none;
+}
+</style>

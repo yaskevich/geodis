@@ -6,16 +6,26 @@ import GeoJSON from 'geojson';
 import csv from 'async-csv';
 import { Sequelize, Op, DataTypes } from 'sequelize';
 // import { Umzug, SequelizeStorage } from 'umzug';
+import { json2csv } from 'json-2-csv';
+import dotenv from 'dotenv';
+dotenv.config();
+const isImportingNeeded = false;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const defaultDir = path.join(__dirname, 'data');
+const [databasePath, databaseDir] = process.env.DB ? [process.env.DB, dirname(process.env.DB)] : [path.join(defaultDir, 'data.db'), defaultDir];
+
+fs.mkdirSync(databaseDir, { recursive: true });
+
 
 const osmIds = JSON.parse(fs.readFileSync((path.join(__dirname, 'data', 'map.json'))));
 
 const sequelize = new Sequelize({
     dialect: 'sqlite',
-    // storage: path.join(__dirname, 'data', 'data.db'),
-    storage: ':memory:',
+    storage: databasePath,
+    // storage: ':memory:',
     define: {
         timestamps: false
     },
@@ -73,16 +83,18 @@ Object.keys(db).forEach((modelName) => {
 
 await db.Place.sync();
 
-const csvString = fs.readFileSync(path.join(__dirname, 'data', 'source.csv'), 'utf-8');
+if (isImportingNeeded) {
+    const csvString = fs.readFileSync(path.join(__dirname, 'data', 'source.csv'), 'utf-8');
 
-const csvArr = await csv.parse(csvString, {
-    delimiter: ",", columns: ['id', 'form', 'caption', 'note', 'coordinates', 'category', null],
-    skip_empty_lines: true
-});
-// drop header line
-csvArr.shift();
+    const csvArr = await csv.parse(csvString, {
+        delimiter: ",", columns: ['id', 'form', 'caption', 'note', 'coordinates', 'category', null],
+        skip_empty_lines: true
+    });
+    // drop header line
+    csvArr.shift();
 
-await db.Place.bulkCreate(csvArr);
+    await db.Place.bulkCreate(csvArr);
+}
 
 const getOSMinfo = async (osmId) => {
     let datum;
@@ -188,8 +200,6 @@ const getPlacesGeo = async () => {
     return GeoJSON.parse(places, { Point: ['lat', 'lon'] })
 };
 
-const setPlaceStatus = async (params) => await db.Place.update({ status: (params?.status || 1) }, { where: { id: Number(params?.id) } });
-
 const statusList = {
     '6': ['success', 'non-mappable'], // (ceased to exist or mythological place)
     '5': ['success', 'OSM ID'],
@@ -200,9 +210,28 @@ const statusList = {
     '0': ['error', 'zero variants'],
 };
 
+const setPlaceStatus = async (params) => await db.Place.update({ status: (params?.status || 1) }, { where: { id: Number(params?.id) } });
+
+const getPlacesReadyJSON = async () => (await db.Place.findAll({
+    where: {
+        status: { [Op.gt]: 3 },
+    },
+    order: [
+        ['id', 'ASC'],
+        ['name', 'ASC'],
+    ],
+    raw: true
+})).map(x => ({
+    id: x.id, name: x.form, coordinates: x.status === 6 ? '' : x.coordinates // lonlat format
+}));
+
+const getPlacesReadyCSV = async () => await json2csv(await getPlacesReadyJSON());
+
 export default {
     getPlaces,
     getPlacesGeo,
     setPlaceStatus,
     statusList,
+    getPlacesReadyJSON,
+    getPlacesReadyCSV,
 }
